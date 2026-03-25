@@ -1,135 +1,76 @@
-/**
- * Hotel Booking Application - Reservation Confirmation & Room Allocation
- * Author: Student
- * Version: 6.0
- */
-
 import java.util.*;
 
-class Reservation {
-    private String guestName;
-    private String roomType;
+class Service {
+    private String name;
+    private double cost;
 
-    public Reservation(String guestName, String roomType) {
-        this.guestName = guestName;
-        this.roomType = roomType;
+    public Service(String name, double cost) {
+        this.name = name;
+        this.cost = cost;
     }
 
-    public String getGuestName() {
-        return guestName;
+    public double getCost() {
+        return cost;
     }
 
-    public String getRoomType() {
-        return roomType;
-    }
-}
-
-class RoomInventory {
-    private Map<String, Integer> availability;
-
-    public RoomInventory() {
-        availability = new HashMap<>();
-    }
-
-    public void addRoomType(String type, int count) {
-        availability.put(type, count);
-    }
-
-    public boolean isAvailable(String roomType) {
-        return availability.getOrDefault(roomType, 0) > 0;
-    }
-
-    public void allocateRoom(String roomType) {
-        int count = availability.getOrDefault(roomType, 0);
-        if (count > 0) {
-            availability.put(roomType, count - 1);
-        }
-    }
-
-    public int getAvailableRooms(String roomType) {
-        return availability.getOrDefault(roomType, 0);
+    public String getName() {
+        return name;
     }
 }
 
-class RoomAllocationService {
-    private RoomInventory inventory;
-    private Map<String, Set<String>> allocatedRooms;
+class AddOnServiceManager {
+    private Map<String, List<Service>> reservationServices = new HashMap<>();
 
-    public RoomAllocationService(RoomInventory inventory) {
-        this.inventory = inventory;
-        allocatedRooms = new HashMap<>();
+    public void addService(String reservationId, Service service) {
+        reservationServices
+                .computeIfAbsent(reservationId, k -> new ArrayList<>())
+                .add(service);
     }
 
-    public String allocateRoom(Reservation res) {
-        String type = res.getRoomType();
-        if (!inventory.isAvailable(type)) {
-            return null;
-        }
-
-        String roomID = type.substring(0, 1).toUpperCase() + UUID.randomUUID().toString().substring(0, 5);
-
-        allocatedRooms.putIfAbsent(type, new HashSet<>());
-        allocatedRooms.get(type).add(roomID);
-
-        inventory.allocateRoom(type);
-
-        return roomID;
+    public List<Service> getServices(String reservationId) {
+        return reservationServices.getOrDefault(reservationId, new ArrayList<>());
     }
 
-    public void displayAllocations() {
-        System.out.println("\nAllocated Rooms:");
-        for (Map.Entry<String, Set<String>> entry : allocatedRooms.entrySet()) {
-            System.out.println(entry.getKey() + " -> " + entry.getValue());
-        }
-    }
-}
-
-class BookingRequestQueue {
-    private Queue<Reservation> queue;
-
-    public BookingRequestQueue() {
-        queue = new LinkedList<>();
-    }
-
-    public void addRequest(Reservation res) {
-        queue.offer(res);
-    }
-
-    public Reservation pollRequest() {
-        return queue.poll();
-    }
-
-    public boolean isEmpty() {
-        return queue.isEmpty();
-    }
-}
-
-public class UseCase6RoomAllocationService {
-    public static void main(String[] args) {
-
-        RoomInventory inventory = new RoomInventory();
-        inventory.addRoomType("Single", 2);
-        inventory.addRoomType("Double", 2);
-        inventory.addRoomType("Suite", 1);
-
-        BookingRequestQueue requestQueue = new BookingRequestQueue();
-        requestQueue.addRequest(new Reservation("Alice", "Single"));
-        requestQueue.addRequest(new Reservation("Bob", "Double"));
-        requestQueue.addRequest(new Reservation("Charlie", "Suite"));
-        requestQueue.addRequest(new Reservation("David", "Single"));
-
-        RoomAllocationService allocationService = new RoomAllocationService(inventory);
-
-        while (!requestQueue.isEmpty()) {
-            Reservation res = requestQueue.pollRequest();
-            String allocatedRoomID = allocationService.allocateRoom(res);
-            if (allocatedRoomID != null) {
-                System.out.println("Reservation confirmed for " + res.getGuestName() + " | Room ID: " + allocatedRoomID);
-            } else {
-                System.out.println("Reservation failed for " + res.getGuestName() + " | Room type not available");
+    public double calculateTotalCost(String reservationId) {
+        double total = 0;
+        List<Service> services = reservationServices.get(reservationId);
+        if (services != null) {
+            for (Service s : services) {
+                total += s.getCost();
             }
         }
+        return total;
+    }
+}
 
-        allocationService.displayAllocations();
+public class BookMyStayApp {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        AddOnServiceManager manager = new AddOnServiceManager();
+
+        System.out.print("Enter Reservation ID: ");
+        String reservationId = sc.nextLine();
+
+        System.out.print("Enter number of services: ");
+        int n = sc.nextInt();
+        sc.nextLine();
+
+        for (int i = 0; i < n; i++) {
+            System.out.print("Enter service name: ");
+            String name = sc.nextLine();
+            System.out.print("Enter service cost: ");
+            double cost = sc.nextDouble();
+            sc.nextLine();
+            manager.addService(reservationId, new Service(name, cost));
+        }
+
+        List<Service> services = manager.getServices(reservationId);
+        System.out.println("Services for Reservation ID " + reservationId + ":");
+        for (Service s : services) {
+            System.out.println(s.getName() + " - " + s.getCost());
+        }
+
+        double totalCost = manager.calculateTotalCost(reservationId);
+        System.out.println("Total Add-On Cost: " + totalCost);
     }
 }
