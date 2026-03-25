@@ -1,4 +1,5 @@
 import java.util.*;
+import java.util.concurrent.*;
 
 class Reservation {
     private String reservationId;
@@ -15,19 +16,18 @@ class Reservation {
         return reservationId;
     }
 
-    public String getRoomType() {
-        return roomType;
-    }
-
     public String getGuestName() {
         return guestName;
+    }
+
+    public String getRoomType() {
+        return roomType;
     }
 }
 
 class BookingSystem {
     private Map<String, Integer> inventory = new HashMap<>();
     private Map<String, Reservation> bookings = new HashMap<>();
-    private Stack<String> rollbackStack = new Stack<>();
 
     public BookingSystem() {
         inventory.put("Single", 2);
@@ -35,69 +35,67 @@ class BookingSystem {
         inventory.put("Suite", 1);
     }
 
-    public void bookRoom(String id, String name, String roomType) {
+    public synchronized boolean bookRoom(String id, String name, String roomType) {
         int available = inventory.getOrDefault(roomType, 0);
         if (available <= 0) {
-            System.out.println("Booking Failed: No rooms available");
-            return;
+            System.out.println("Booking Failed for " + name + ": No rooms available");
+            return false;
         }
 
         Reservation reservation = new Reservation(id, name, roomType);
         bookings.put(id, reservation);
         inventory.put(roomType, available - 1);
-        rollbackStack.push(roomType);
 
-        System.out.println("Booking Successful");
+        System.out.println("Booking Successful for " + name + " (" + roomType + ")");
+        return true;
     }
 
-    public void cancelBooking(String id) {
-        if (!bookings.containsKey(id)) {
-            System.out.println("Cancellation Failed: Invalid reservation ID");
-            return;
-        }
-
-        Reservation reservation = bookings.remove(id);
-        String roomType = reservation.getRoomType();
-
-        inventory.put(roomType, inventory.get(roomType) + 1);
-
-        if (!rollbackStack.isEmpty()) {
-            rollbackStack.pop();
-        }
-
-        System.out.println("Cancellation Successful for ID: " + id);
-    }
-
-    public void displayInventory() {
+    public synchronized void displayInventory() {
         System.out.println("Current Inventory:");
-        for (String type : inventory.keySet()) {
-            System.out.println(type + " : " + inventory.get(type));
+        for (Map.Entry<String, Integer> entry : inventory.entrySet()) {
+            System.out.println(entry.getKey() + " : " + entry.getValue());
         }
     }
 }
 
-public class BookMyStayApp {
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        BookingSystem system = new BookingSystem();
+class BookingTask implements Runnable {
+    private BookingSystem system;
+    private String id;
+    private String name;
+    private String roomType;
 
-        System.out.print("Enter Reservation ID: ");
-        String id = sc.nextLine();
+    public BookingTask(BookingSystem system, String id, String name, String roomType) {
+        this.system = system;
+        this.id = id;
+        this.name = name;
+        this.roomType = roomType;
+    }
 
-        System.out.print("Enter Guest Name: ");
-        String name = sc.nextLine();
-
-        System.out.print("Enter Room Type (Single/Double/Suite): ");
-        String roomType = sc.nextLine();
-
+    @Override
+    public void run() {
         system.bookRoom(id, name, roomType);
+    }
+}
 
-        system.displayInventory();
+public class BookMyStayApp {
+    public static void main(String[] args) throws InterruptedException {
+        BookingSystem system = new BookingSystem();
+        ExecutorService executor = Executors.newFixedThreadPool(5);
 
-        System.out.print("Enter Reservation ID to cancel: ");
-        String cancelId = sc.nextLine();
+        List<BookingTask> tasks = Arrays.asList(
+                new BookingTask(system, "R1", "Alice", "Single"),
+                new BookingTask(system, "R2", "Bob", "Single"),
+                new BookingTask(system, "R3", "Charlie", "Double"),
+                new BookingTask(system, "R4", "David", "Suite"),
+                new BookingTask(system, "R5", "Eve", "Single")
+        );
 
-        system.cancelBooking(cancelId);
+        for (BookingTask task : tasks) {
+            executor.execute(task);
+        }
+
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.MINUTES);
 
         system.displayInventory();
     }
